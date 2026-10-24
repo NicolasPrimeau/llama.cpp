@@ -3009,7 +3009,15 @@ struct ggml_cplan ggml_graph_plan(
                         size_t n_chunks = n_tasks;
                         size_t decode   = sizeof(float)*(neq2*n_chunks*(2+DV) + n_tasks*(DK + 2*DV));
 
-                        cur += MAX(prefill, decode);
+                        // Few-token tiled path: tile scratch + [row][kv chunk][M, S, VKQ] partials, at most n_tasks chunks
+                        const int64_t neq1 = node->src[0]->ne[1];
+                        const int64_t neq3 = node->src[0]->ne[3];
+                        size_t gqa = 0;
+                        if (neq1 > 1 && neq1 < GGML_FA_TILE_Q) {
+                            gqa = prefill + CACHE_LINE_SIZE*n_tasks + sizeof(float)*neq1*neq2*neq3*n_tasks*(2+DV);
+                        }
+
+                        cur += MAX(MAX(prefill, decode), gqa);
                     } break;
                 case GGML_OP_FLASH_ATTN_BACK:
                     {
