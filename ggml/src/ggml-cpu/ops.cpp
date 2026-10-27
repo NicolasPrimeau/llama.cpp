@@ -9553,8 +9553,9 @@ static void ggml_flash_attn_ext_reduce_partials(
 //   GGML_QUEST_BUDGET=<tokens>  cells attended exactly per KV head and decode step (0 = off, the default)
 //   GGML_QUEST_PAGE=<tokens>    page size (default and minimum 16)
 //   GGML_QUEST_SKIP=<n>         keep the first n layers dense (default 2, as in the paper)
-//   GGML_QUEST_PER_HEAD=1       select pages per query head instead of once per KV head (GQA); the cells read are the
-//                               same, since the exact pass already runs per query head
+//   GGML_QUEST_PER_HEAD=0       select pages once per KV head instead of per query head (default 1). Per query head
+//                               reads the same cells, since the exact pass already runs per query head, and keeps
+//                               quality under GQA (shared selection lost retrieval at 32k)
 struct ggml_quest_config {
     int budget;
     int page;
@@ -9568,7 +9569,7 @@ static const ggml_quest_config & ggml_quest_get_config() {
             const char * s = getenv(name);
             return s ? atoi(s) : def;
         };
-        return ggml_quest_config{ env("GGML_QUEST_BUDGET", 0), std::max(16, env("GGML_QUEST_PAGE", 16)), env("GGML_QUEST_SKIP", 2), env("GGML_QUEST_PER_HEAD", 0) != 0 };
+        return ggml_quest_config{ env("GGML_QUEST_BUDGET", 0), std::max(16, env("GGML_QUEST_PAGE", 16)), env("GGML_QUEST_SKIP", 2), env("GGML_QUEST_PER_HEAD", 1) != 0 };
     }();
     return cfg;
 }
