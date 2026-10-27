@@ -3009,6 +3009,11 @@ struct ggml_cplan ggml_graph_plan(
                         size_t n_chunks = n_tasks;
                         size_t decode   = sizeof(float)*(neq2*n_chunks*(2+DV) + n_tasks*(DK + 2*DV));
 
+                        // Quest sparse decode (opt-in): Q+/Q- in F16, then page scores and selected pages per KV head, or
+                        // per query head (neq2 >= KV heads, so it bounds both)
+                        const int64_t nek1 = node->src[1]->ne[1];
+                        decode += sizeof(ggml_fp16_t)*(neq2*2*DK + 64) + (sizeof(float) + sizeof(int32_t))*neq2*(nek1/16 + 1) + sizeof(int32_t)*neq2;
+
                         cur += MAX(prefill, decode);
                     } break;
                 case GGML_OP_FLASH_ATTN_BACK:
