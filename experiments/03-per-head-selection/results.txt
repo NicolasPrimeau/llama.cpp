@@ -1,0 +1,1 @@
+per-head budget 2048 rc=0 chunk PPL ln(PPL(Q)/PPL(base)) KL Divergence Δp RMS Same top p;Mean PPL(Q)/PPL(base) : 1.028194 ± 0.002055;Mean KLD: 0.052685 ± 0.000450;Same top p: 85.454 ± 0.195 %;

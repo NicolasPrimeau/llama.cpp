@@ -1,0 +1,5 @@
+dense rc=0 13.41.056.959 I Final estimate: PPL = 17.7230 +/- 0.26331
+budget 1024 rc=0 chunk PPL ln(PPL(Q)/PPL(base)) KL Divergence Δp RMS Same top p;Mean PPL(Q)/PPL(base) : 1.185122 ± 0.004754;Mean KLD: 0.199397 ± 0.001597;99.0% KLD: 1.264647;Same top p: 73.396 ± 0.244 %;
+budget 2048 rc=0 chunk PPL ln(PPL(Q)/PPL(base)) KL Divergence Δp RMS Same top p;Mean PPL(Q)/PPL(base) : 1.100623 ± 0.003298;Mean KLD: 0.113940 ± 0.000961;99.0% KLD: 0.707649;Same top p: 79.372 ± 0.224 %;
+budget 4096 rc=0 chunk PPL ln(PPL(Q)/PPL(base)) KL Divergence Δp RMS Same top p;Mean PPL(Q)/PPL(base) : 1.047288 ± 0.002113;Mean KLD: 0.052349 ± 0.000464;99.0% KLD: 0.318748;Same top p: 85.424 ± 0.195 %;
+sweep done

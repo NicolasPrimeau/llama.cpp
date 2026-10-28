@@ -1,0 +1,11 @@
+qwen2.5-0.5b-instruct-q8_0-q8-old:     tg64 @ d8192          24.59 ± 0.30 ;   tg64 @ d32768           8.44 ± 0.35 ;
+qwen2.5-0.5b-instruct-q8_0-q8-new:     tg64 @ d8192          24.62 ± 0.69 ;   tg64 @ d32768           8.82 ± 0.44 ;
+qwen2.5-0.5b-instruct-q8_0-q8-q2048:     tg64 @ d8192          39.32 ± 0.54 ;   tg64 @ d32768          26.80 ± 0.89 ;
+qwen2.5-0.5b-instruct-q8_0-f16-q2048:     tg64 @ d8192          38.00 ± 0.19 ;   tg64 @ d32768          24.38 ± 0.79 ;
+qwen2.5-0.5b-instruct-q8_0-f16-dense:     tg64 @ d8192          26.68 ± 0.68 ;   tg64 @ d32768           6.69 ± 0.09 ;
+Llama-3.2-1B-Instruct-Q8_0-q8-old:     tg64 @ d8192           9.63 ± 0.05 ;   tg64 @ d32768           3.11 ± 0.05 ;
+Llama-3.2-1B-Instruct-Q8_0-q8-new:     tg64 @ d8192          11.82 ± 0.05 ;   tg64 @ d32768           1.95 ± 0.01 ;
+Llama-3.2-1B-Instruct-Q8_0-q8-q2048:     tg64 @ d8192          16.97 ± 0.28 ;   tg64 @ d32768           7.96 ± 0.22 ;
+Llama-3.2-1B-Instruct-Q8_0-f16-q2048:     tg64 @ d8192          14.68 ± 0.47 ;   tg64 @ d32768           7.52 ± 0.24 ;
+Llama-3.2-1B-Instruct-Q8_0-f16-dense:     tg64 @ d8192           7.52 ± 0.28 ;   tg64 @ d32768           1.82 ± 0.01 ;
+done

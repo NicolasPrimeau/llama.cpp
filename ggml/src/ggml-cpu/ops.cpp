@@ -9,6 +9,11 @@
 #include "vec.h"
 
 #include <algorithm>
+#include <cstdlib>
+#include <cstring>
+#include <mutex>
+#include <unordered_map>
+#include <vector>
 #include <cfloat>
 #include <cmath>
 
@@ -8940,7 +8945,8 @@ static void ggml_compute_forward_flash_attn_ext_f16_one_chunk(
         ggml_tensor * dst,
         int ir0, int ir1,
         int64_t ic_start, int64_t ic_end,
-        float * partials, int64_t partial_stride) {
+        float * partials, int64_t partial_stride,
+        const int32_t * pages = nullptr, int64_t n_pages = 0, int64_t page_size = 0) {
 
     const bool write_partials = (partials != nullptr);
     const ggml_tensor * q     = dst->src[0];
@@ -9059,71 +9065,77 @@ static void ggml_compute_forward_flash_attn_ext_f16_one_chunk(
         // loop over n_kv and n_head_kv
         // ref: https://arxiv.org/pdf/2112.05682.pdf
 
-        for (int64_t ic = ic_start; ic < ic_end; ++ic) {
-            const float mv = mp ? slope*GGML_CPU_FP16_TO_FP32(mp[ic]) : 0.0f;
-            if (mv == -INFINITY) {
-                continue;
-            }
-
-            float s; // KQ value
-
-            const char * k_data = (const char *) k->data + ( ic*nbk1 + ik2*nbk2 + ik3*nbk3);
-            kq_vec_dot(DK, &s, 0, k_data, 0, Q_q, 0, 1);
-
-            s = s*scale; // scale KQ value
-
-            if (logit_softcap != 0.0f) {
-                s = logit_softcap*tanhf(s);
-            }
-
-            s += mv; // apply mask
-
-            const float Mold = M;
-
-            float ms = 1.0f; // upon new higher max val, scale VKQ and KQ sum with this value
-            float vs = 1.0f; // post-softmax KQ value, expf(s - M)
-
-            const char * v_data = ((const char *) v->data + (ic*nbv1 + iv2*nbv2 + iv3*nbv3));
-
-            if (v->type == GGML_TYPE_F16) {
-                if (s > M) {
-                    // s is new maximum, ms < 1.0f, vs == expf(s - s) == 1.0f
-                    M = s;
-                    ms = expf(Mold - M);
-
-                    // V = V*expf(Mold - M)
-                    ggml_vec_scale_f16(DV, VKQ16, ms);
-                } else {
-                    // no new maximum, ms == 1.0f, vs != 1.0f
-                    vs = expf(s - M);
+        // with a page list (sparse decode), visit only those pages' cells; otherwise the whole [ic_start, ic_end) range
+        const int64_t n_spans = pages ? n_pages : 1;
+        for (int64_t is = 0; is < n_spans; ++is) {
+            const int64_t c0 = pages ? pages[is]*page_size : ic_start;
+            const int64_t c1 = pages ? std::min(c0 + page_size, ic_end) : ic_end;
+            for (int64_t ic = c0; ic < c1; ++ic) {
+                const float mv = mp ? slope*GGML_CPU_FP16_TO_FP32(mp[ic]) : 0.0f;
+                if (mv == -INFINITY) {
+                    continue;
                 }
 
-                // V += v*expf(s - M)
-                ggml_vec_mad_f16(DV, VKQ16, (const ggml_fp16_t *) v_data, vs);
-            } else {
-                if (s > M) {
-                    // s is new maximum, ms < 1.0f, vs == expf(s - s) == 1.0f
-                    M = s;
-                    ms = expf(Mold - M);
+                float s; // KQ value
 
-                    // V = V*expf(Mold - M)
-                    ggml_vec_scale_f32(DV, VKQ32, ms);
-                } else {
-                    // no new maximum, ms == 1.0f, vs != 1.0f
-                    vs = expf(s - M);
+                const char * k_data = (const char *) k->data + ( ic*nbk1 + ik2*nbk2 + ik3*nbk3);
+                kq_vec_dot(DK, &s, 0, k_data, 0, Q_q, 0, 1);
+
+                s = s*scale; // scale KQ value
+
+                if (logit_softcap != 0.0f) {
+                    s = logit_softcap*tanhf(s);
                 }
 
-                // V += v*expf(s - M)
-                if (v_to_float) {
-                    v_to_float(v_data, V32, DV);
-                    ggml_vec_mad_f32(DV, VKQ32, V32, vs);
+                s += mv; // apply mask
+
+                const float Mold = M;
+
+                float ms = 1.0f; // upon new higher max val, scale VKQ and KQ sum with this value
+                float vs = 1.0f; // post-softmax KQ value, expf(s - M)
+
+                const char * v_data = ((const char *) v->data + (ic*nbv1 + iv2*nbv2 + iv3*nbv3));
+
+                if (v->type == GGML_TYPE_F16) {
+                    if (s > M) {
+                        // s is new maximum, ms < 1.0f, vs == expf(s - s) == 1.0f
+                        M = s;
+                        ms = expf(Mold - M);
+
+                        // V = V*expf(Mold - M)
+                        ggml_vec_scale_f16(DV, VKQ16, ms);
+                    } else {
+                        // no new maximum, ms == 1.0f, vs != 1.0f
+                        vs = expf(s - M);
+                    }
+
+                    // V += v*expf(s - M)
+                    ggml_vec_mad_f16(DV, VKQ16, (const ggml_fp16_t *) v_data, vs);
                 } else {
-                    // V is F32
-                    ggml_vec_mad_f32(DV, VKQ32, (const float *) v_data, vs);
+                    if (s > M) {
+                        // s is new maximum, ms < 1.0f, vs == expf(s - s) == 1.0f
+                        M = s;
+                        ms = expf(Mold - M);
+
+                        // V = V*expf(Mold - M)
+                        ggml_vec_scale_f32(DV, VKQ32, ms);
+                    } else {
+                        // no new maximum, ms == 1.0f, vs != 1.0f
+                        vs = expf(s - M);
+                    }
+
+                    // V += v*expf(s - M)
+                    if (v_to_float) {
+                        v_to_float(v_data, V32, DV);
+                        ggml_vec_mad_f32(DV, VKQ32, V32, vs);
+                    } else {
+                        // V is F32
+                        ggml_vec_mad_f32(DV, VKQ32, (const float *) v_data, vs);
+                    }
                 }
+
+                S = S*ms + vs; // scale and increment sum with partial sum
             }
-
-            S = S*ms + vs; // scale and increment sum with partial sum
         }
 
         if (v->type == GGML_TYPE_F16) {
@@ -9533,6 +9545,258 @@ static void ggml_flash_attn_ext_reduce_partials(
     }
 }
 
+// Quest (Tang et al., 2024, arXiv:2406.10774): query-aware sparse attention for long-context decode.
+// Each page of keys keeps an element-wise min and max; for a query q, s(page) = sum_i max(q_i*min_i, q_i*max_i) is an
+// upper bound on q.k for every key in the page. Exact attention then runs over the top-scoring pages only, plus the
+// first page (attention sink) and the most recent pages. The rest of the cache is never read.
+// Opt-in through the environment (prototype):
+//   GGML_QUEST_BUDGET=<tokens>  cells attended exactly per KV head and decode step (0 = off, the default)
+//   GGML_QUEST_PAGE=<tokens>    page size (default and minimum 16)
+//   GGML_QUEST_SKIP=<n>         keep the first n layers dense (default 2, as in the paper)
+//   GGML_QUEST_PER_HEAD=0       select pages once per KV head instead of per query head (default 1). Per query head
+//                               reads the same cells, since the exact pass already runs per query head, and keeps
+//                               quality under GQA (shared selection lost retrieval at 32k)
+struct ggml_quest_config {
+    int budget;
+    int page;
+    int skip;
+    bool per_head;
+};
+
+static const ggml_quest_config & ggml_quest_get_config() {
+    static const ggml_quest_config cfg = [] {
+        auto env = [](const char * name, int def) {
+            const char * s = getenv(name);
+            return s ? atoi(s) : def;
+        };
+        return ggml_quest_config{ env("GGML_QUEST_BUDGET", 0), std::max(16, env("GGML_QUEST_PAGE", 16)), env("GGML_QUEST_SKIP", 2), env("GGML_QUEST_PER_HEAD", 1) != 0 };
+    }();
+    return cfg;
+}
+
+// Page summaries persist across decode steps, keyed by the K cache buffer. A page is (re)summarized when the first
+// 8 bytes of its first or last key change, which catches pages filled after the last summary and cells rewritten in
+// place (prompt-cache reuse, rewinds). The page being filled is always in the exact recent window.
+struct ggml_quest_pages {
+    std::vector<ggml_fp16_t> kmin; // [page][kv head][DK]
+    std::vector<ggml_fp16_t> kmax;
+    std::vector<uint64_t>    fp;   // [page][kv head], fingerprint of the summarized keys
+};
+
+static std::mutex                                     ggml_quest_mutex;
+static std::unordered_map<const void *, ggml_quest_pages> ggml_quest_cache;
+
+static int ggml_quest_layer(const ggml_tensor * k) {
+    const char * name = k->view_src ? k->view_src->name : k->name;
+    const char * p    = strstr(name, "k_l");
+    return p ? atoi(p + 3) : -1;
+}
+
+static uint64_t ggml_quest_fingerprint(const char * first, const char * last) {
+    uint64_t a, b;
+    memcpy(&a, first, sizeof(a));
+    memcpy(&b, last,  sizeof(b));
+    return a ^ (b << 1 | b >> 63) ^ 1; // never 0, so a fresh entry is always stale
+}
+
+// returns false when the dense path should run instead (the decision is the same on every thread)
+static bool ggml_compute_forward_flash_attn_ext_quest(
+        const ggml_compute_params * params,
+        ggml_tensor * dst) {
+    const ggml_quest_config & cfg = ggml_quest_get_config();
+
+    const ggml_tensor * q     = dst->src[0];
+    const ggml_tensor * k     = dst->src[1];
+    const ggml_tensor * v     = dst->src[2];
+    const ggml_tensor * mask  = dst->src[3];
+
+    const ggml_to_float_t k_to_float = ggml_get_type_traits(k->type)->to_float;
+    if (cfg.budget <= 0 || !mask || mask->ne[2] != 1 || (k->type != GGML_TYPE_F32 && !k_to_float)) {
+        return false;
+    }
+
+    float max_bias      = 0.0f;
+    float logit_softcap = 0.0f;
+    memcpy(&max_bias,      (const float *) dst->op_params + 1, sizeof(float));
+    memcpy(&logit_softcap, (const float *) dst->op_params + 2, sizeof(float));
+    const int il = ggml_quest_layer(k); // -1 when K is not a KV cache tensor (e.g. in tests)
+    if (max_bias != 0.0f || logit_softcap != 0.0f || (il >= 0 && il < cfg.skip)) {
+        return false;
+    }
+
+    const int64_t DK   = k->ne[0];
+    const int64_t DV   = v->ne[0];
+    const int64_t nek1 = k->ne[1];
+    const int64_t nek2 = k->ne[2];
+    const int64_t neq2 = q->ne[2];
+    const int64_t rk2  = neq2/nek2;
+    const int64_t P    = cfg.page;
+
+    if (v->ne[2] != nek2) {
+        return false;
+    }
+
+    // the cells past the last finite mask entry are padding; the recent window ends at the last valid cell
+    const ggml_fp16_t * mp = (const ggml_fp16_t *) mask->data;
+    int64_t n_used = nek1;
+    while (n_used > 0 && GGML_CPU_FP16_TO_FP32(mp[n_used - 1]) == -INFINITY) {
+        n_used--;
+    }
+
+    const int64_t n_pages  = (n_used + P - 1)/P;
+    const int64_t n_recent = std::min<int64_t>(n_pages, 2);         // the page being filled and the one before it
+    const int64_t n_keep   = std::max<int64_t>(cfg.budget/P, n_recent + 1);
+    if (n_pages <= n_keep + 1) {
+        return false;
+    }
+
+    const int ith = params->ith;
+    const int nth = params->nth;
+
+    // pages are selected per group: a KV head, or a query head with per_head
+    const int64_t n_grp = cfg.per_head ? neq2 : nek2;
+
+    // scratch after the split-KV partials: Q+ and Q- in F16 [neq2][2][DK], scores and selected pages [n_grp][n_pages_max]
+    const int64_t n_pages_max = nek1/16 + 1;
+    float       * partials    = (float *) params->wdata + nth*(DK + 2*DV + CACHE_LINE_SIZE_F32);
+    ggml_fp16_t * qpm         = (ggml_fp16_t *) (partials + neq2*nth*(2 + DV));
+    float       * scores      = (float *) (qpm + neq2*2*DK + 64);
+    int32_t     * sel         = (int32_t *) (scores + n_grp*n_pages_max);
+    int32_t     * n_sel       = sel + n_grp*n_pages_max;
+
+    ggml_quest_pages * qp;
+    {
+        std::lock_guard<std::mutex> lock(ggml_quest_mutex);
+        qp = &ggml_quest_cache[k->data];
+        if (ith == 0 && ((int64_t) qp->fp.size() < n_pages*nek2 || (int64_t) qp->kmin.size() < n_pages*nek2*DK)) {
+            qp->kmin.resize(n_pages_max*nek2*DK);
+            qp->kmax.resize(n_pages_max*nek2*DK);
+            qp->fp.resize(n_pages_max*nek2, 0);
+        }
+    }
+
+    if (ith == 0) {
+        // the query split into its positive and negative parts, so the bound is two F16 dot products per page
+        float scale = 1.0f;
+        memcpy(&scale, (const float *) dst->op_params + 0, sizeof(float));
+        for (int64_t h = 0; h < neq2; h++) {
+            const float * pq = (const float *) ((const char *) q->data + h*q->nb[2]);
+            for (int64_t i = 0; i < DK; i++) {
+                qpm[(2*h + 0)*DK + i] = GGML_CPU_FP32_TO_FP16(std::max(pq[i], 0.0f)*scale);
+                qpm[(2*h + 1)*DK + i] = GGML_CPU_FP32_TO_FP16(std::min(pq[i], 0.0f)*scale);
+            }
+        }
+    }
+    ggml_barrier(params->threadpool);
+
+    // keys are dequantized one row at a time into the thread's chunk-kernel scratch, which is free until the exact pass
+    float * krow = (float *) params->wdata + ith*(DK + 2*DV + CACHE_LINE_SIZE_F32);
+
+    // refresh stale summaries and score every page, split across threads by (page, kv head)
+    for (int64_t it = ith; it < n_pages*nek2; it += nth) {
+        const int64_t pg = it/nek2;
+        const int64_t g  = it%nek2;
+        const int64_t c0 = pg*P;
+        const int64_t c1 = std::min(c0 + P, n_used);
+
+        const char * k0 = (const char *) k->data + c0*k->nb[1] + g*k->nb[2];
+        const uint64_t f = ggml_quest_fingerprint(k0, k0 + (c1 - 1 - c0)*k->nb[1]);
+
+        ggml_fp16_t * kmin = qp->kmin.data() + (pg*nek2 + g)*DK;
+        ggml_fp16_t * kmax = qp->kmax.data() + (pg*nek2 + g)*DK;
+
+        if (qp->fp[pg*nek2 + g] != f) {
+            // rounding to F16 is monotonic, so the min/max of the rounded keys is the rounded min/max
+            for (int64_t c = c0; c < c1; c++) {
+                const char * kc = k0 + (c - c0)*k->nb[1];
+                if (k->type == GGML_TYPE_F32) {
+                    memcpy(krow, kc, DK*sizeof(float));
+                } else {
+                    k_to_float(kc, krow, DK);
+                }
+                for (int64_t i = 0; i < DK; i++) {
+                    const ggml_fp16_t x = GGML_CPU_FP32_TO_FP16(krow[i]);
+                    if (c == c0 || GGML_CPU_FP16_TO_FP32(x) < GGML_CPU_FP16_TO_FP32(kmin[i])) kmin[i] = x;
+                    if (c == c0 || GGML_CPU_FP16_TO_FP32(x) > GGML_CPU_FP16_TO_FP32(kmax[i])) kmax[i] = x;
+                }
+            }
+            qp->fp[pg*nek2 + g] = f;
+        }
+
+        bool any = false;
+        for (int64_t c = c0; c < c1 && !any; c++) {
+            any = GGML_CPU_FP16_TO_FP32(mp[c]) != -INFINITY;
+        }
+
+        // with per_head each query head keeps its own bound, otherwise the KV head takes the largest over its query heads
+        float best = -INFINITY;
+        for (int64_t h = g*rk2; h < (g + 1)*rk2; h++) {
+            float bound = -INFINITY;
+            if (any) {
+                float hi, lo;
+                ggml_vec_dot_f16(DK, &hi, 0, kmax, 0, qpm + (2*h + 0)*DK, 0, 1);
+                ggml_vec_dot_f16(DK, &lo, 0, kmin, 0, qpm + (2*h + 1)*DK, 0, 1);
+                bound = hi + lo;
+            }
+            if (cfg.per_head) {
+                scores[h*n_pages_max + pg] = bound;
+            }
+            best = std::max(best, bound);
+        }
+        if (!cfg.per_head) {
+            scores[g*n_pages_max + pg] = best;
+        }
+    }
+    ggml_barrier(params->threadpool);
+
+    // per group: the sink page and the recent pages, then the best-scoring pages up to the budget
+    for (int64_t g = ith; g < n_grp; g += nth) {
+        int32_t       * out = sel + g*n_pages_max;
+        const float   * sc  = scores + g*n_pages_max;
+        int64_t         n   = 0;
+
+        out[n++] = 0;
+        for (int64_t pg = n_pages - n_recent; pg < n_pages; pg++) {
+            out[n++] = (int32_t) pg;
+        }
+        std::vector<int32_t> cand;
+        for (int64_t pg = 1; pg < n_pages - n_recent; pg++) {
+            if (sc[pg] != -INFINITY) {
+                cand.push_back((int32_t) pg);
+            }
+        }
+        const int64_t n_top = std::min<int64_t>(cand.size(), n_keep - n);
+        std::nth_element(cand.begin(), cand.begin() + n_top, cand.end(), [sc](int32_t a, int32_t b) { return sc[a] > sc[b]; });
+        for (int64_t i = 0; i < n_top; i++) {
+            out[n++] = cand[i];
+        }
+        std::sort(out, out + n);
+        n_sel[g] = (int32_t) n;
+    }
+    ggml_barrier(params->threadpool);
+
+    // exact attention over the selected pages: each thread takes a slice of every kv head's pages, then the partials
+    // are merged as in the split-KV path (thread 0 always runs so the sinks are applied once)
+    const int64_t partial_size   = 2 + DV;
+    const int64_t partial_stride = nth*partial_size;
+    float       * chunk_partials = partials + ith*partial_size;
+
+    for (int64_t h = 0; h < neq2; h++) {
+        const int64_t g  = cfg.per_head ? h : h/rk2;
+        const int64_t n  = n_sel[g];
+        const int64_t i0 = n*ith/nth;
+        const int64_t i1 = n*(ith + 1)/nth;
+        ggml_compute_forward_flash_attn_ext_f16_one_chunk(
+            params, dst, h, h + 1, ith == 0 ? 0 : 1, n_used,
+            chunk_partials, partial_stride, sel + g*n_pages_max + i0, i1 - i0, P);
+    }
+
+    ggml_barrier(params->threadpool);
+    ggml_flash_attn_ext_reduce_partials(params, dst, nth, 0);
+
+    return true;
+}
+
 static void ggml_compute_forward_flash_attn_ext_f16(
         const ggml_compute_params * params,
         ggml_tensor * dst) {
@@ -9582,9 +9846,15 @@ static void ggml_compute_forward_flash_attn_ext_f16(
     const bool use_ref = params->use_ref;
 
     const bool kv_is_f32_or_f16 = (k->type == GGML_TYPE_F32 || k->type == GGML_TYPE_F16);
-    const bool use_split_kv_path = !use_ref && (neq1 == 1 && neq3 == 1) && kv_is_f32_or_f16 && (k->type == v->type) && q->type == GGML_TYPE_F32 && nek1 >= 512;
+    // single-token decode over a long cache
+    const bool is_decode = !use_ref && (neq1 == 1 && neq3 == 1) && q->type == GGML_TYPE_F32 && nek1 >= 512;
+    const bool use_split_kv_path = is_decode && kv_is_f32_or_f16 && (k->type == v->type);
 
-    if (use_split_kv_path) {
+    // Quest takes any K/V type the chunk kernel reads (K through vec_dot, V through to_float). Dense quantized decode
+    // stays on the per-head path: splitting the cache over threads was slower there at 32k (Llama-3.2-1B q8_0)
+    if (is_decode && ggml_compute_forward_flash_attn_ext_quest(params, dst)) {
+        // sparse decode handled the whole op
+    } else if (use_split_kv_path) {
         const int64_t chunk_size = (nek1 + nth - 1) / nth;
 
         // Partials buffer layout: [q_head][kv_chunk][M, S, VKQ]

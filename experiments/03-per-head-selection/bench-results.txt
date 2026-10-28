@@ -1,0 +1,12 @@
+budget=0 per_head=0 rc=0
+| qwen2 1B Q8_0                  | 638.74 MiB |   630.17 M | CPU        |       8 |   1 |    tg64 @ d8192 |         26.87 ± 0.38 |
+| qwen2 1B Q8_0                  | 638.74 MiB |   630.17 M | CPU        |       8 |   1 |   tg64 @ d32768 |          6.59 ± 0.06 |
+budget=2048 per_head=0 rc=0
+| qwen2 1B Q8_0                  | 638.74 MiB |   630.17 M | CPU        |       8 |   1 |    tg64 @ d8192 |         41.22 ± 0.36 |
+| qwen2 1B Q8_0                  | 638.74 MiB |   630.17 M | CPU        |       8 |   1 |   tg64 @ d32768 |         26.37 ± 0.23 |
+budget=2048 per_head=1 rc=0
+| qwen2 1B Q8_0                  | 638.74 MiB |   630.17 M | CPU        |       8 |   1 |    tg64 @ d8192 |         39.04 ± 0.34 |
+| qwen2 1B Q8_0                  | 638.74 MiB |   630.17 M | CPU        |       8 |   1 |   tg64 @ d32768 |         24.89 ± 0.18 |
+budget=1024 per_head=1 rc=0
+| qwen2 1B Q8_0                  | 638.74 MiB |   630.17 M | CPU        |       8 |   1 |    tg64 @ d8192 |         43.50 ± 0.30 |
+| qwen2 1B Q8_0                  | 638.74 MiB |   630.17 M | CPU        |       8 |   1 |   tg64 @ d32768 |         26.64 ± 0.28 |

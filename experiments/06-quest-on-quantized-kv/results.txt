@@ -1,0 +1,6 @@
+q8-old rc=0 611s: chunk PPL ln(PPL(Q)/PPL(base)) KL Divergence Δp RMS Same top p;Mean PPL(Q)/PPL(base) : 1.021746 ± 0.002255;Mean KLD: 0.014690 ± 0.000650;Same top p: 92.941 ± 0.283 %;
+q8-new rc=0 636s: chunk PPL ln(PPL(Q)/PPL(base)) KL Divergence Δp RMS Same top p;Mean PPL(Q)/PPL(base) : 1.020275 ± 0.002266;Mean KLD: 0.014975 ± 0.000730;Same top p: 92.978 ± 0.282 %;
+q8-q1024 rc=0 589s: chunk PPL ln(PPL(Q)/PPL(base)) KL Divergence Δp RMS Same top p;Mean PPL(Q)/PPL(base) : 1.031432 ± 0.003555;Mean KLD: 0.037634 ± 0.000933;Same top p: 88.056 ± 0.358 %;
+q8-q2048 rc=0 654s: chunk PPL ln(PPL(Q)/PPL(base)) KL Divergence Δp RMS Same top p;Mean PPL(Q)/PPL(base) : 1.020372 ± 0.002576;Mean KLD: 0.019105 ± 0.000902;Same top p: 92.062 ± 0.299 %;
+f16-q1024 rc=0 595s: chunk PPL ln(PPL(Q)/PPL(base)) KL Divergence Δp RMS Same top p;Mean PPL(Q)/PPL(base) : 1.009732 ± 0.002044;Mean KLD: 0.013633 ± 0.000271;Same top p: 92.489 ± 0.291 %;
+done
