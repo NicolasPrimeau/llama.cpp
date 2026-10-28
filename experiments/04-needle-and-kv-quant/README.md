@@ -42,3 +42,8 @@ done
 Per-head b2048 keeps exact retrieval at 32k. Smaller budgets fail occasionally, and the failures are dropped or garbled digits rather than wrong facts.
 
 q8_0 KV is nearly lossless but only 1.4× faster at 32k. q4_0 KV breaks this model outright (PPL ×25). So quantization and Quest address different costs: q8_0 halves the bytes per token, while Quest cuts the number of tokens read. Experiment 06 combines them.
+
+## Files
+
+- `verify.sh`: the original script. `results.txt`: its summary output.
+- `logs/`: needle transcripts with each trial's answer, KV-quant KLD and bench output.

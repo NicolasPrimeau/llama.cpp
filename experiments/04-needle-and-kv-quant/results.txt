@@ -1,0 +1,10 @@
+needle dense: RESULT 15/15 fails: 0
+needle perhead2048: RESULT 15/15 fails: 0
+needle perhead1024: RESULT 14/15 fails: 1
+needle perhead512: RESULT 14/15 fails: 1
+needle shared2048: RESULT 14/15 fails: 1
+kv q8_0 quality: chunk PPL ln(PPL(Q)/PPL(base)) KL Divergence Δp RMS Same top p;Mean PPL(Q)/PPL(base) : 1.012109 ± 0.000937;Mean KLD: 0.010799 ± 0.000256;Same top p: 93.832 ± 0.133 %;
+kv q8_0 speed:     tg64 @ d8192          24.70 ± 0.10 ;   tg64 @ d32768           8.95 ± 0.05 ;
+kv q4_0 quality: chunk PPL ln(PPL(Q)/PPL(base)) KL Divergence Δp RMS Same top p;Mean PPL(Q)/PPL(base) : 25.076296 ± 0.427507;Mean KLD: 3.270167 ± 0.012482;Same top p: 18.342 ± 0.214 %;
+kv q4_0 speed:     tg64 @ d8192          23.87 ± 0.24 ;   tg64 @ d32768           8.49 ± 0.05 ;
+verify done

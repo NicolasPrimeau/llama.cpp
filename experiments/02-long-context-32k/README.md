@@ -25,3 +25,8 @@ Dense PPL is 17.72.
 ## Conclusion
 
 At 32k, a fixed budget loses much more than it did at 4k: KLD at budget 2048 is 0.114 here versus 0.006 in experiment 01. With 7 query heads sharing each KV head, the shared page selection is a compromise between heads that want different pages. Experiment 03 tests giving each query head its own selection.
+
+## Files
+
+- `quest-32k.sh`: the original script. `results.txt`: its summary output.
+- `logs/`: raw `llama-perplexity` output per budget.

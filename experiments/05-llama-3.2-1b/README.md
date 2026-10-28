@@ -35,3 +35,8 @@ The needle misses drop a digit (for example 26316 → "2634", 38182 → "3812").
 ## Conclusion
 
 The results carry over: at budget 2048 and 32k, KLD is 0.057 (Qwen: 0.053), retrieval is perfect, and decode is 4.2× faster. Llama tolerates q8_0 KV even better than Qwen, which leads to experiment 06.
+
+## Files
+
+- `run.sh`: the original script. `results.txt`: its summary output.
+- `logs/`: raw output, including needle transcripts.

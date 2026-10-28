@@ -34,3 +34,8 @@ Dense PPL is 15.98.
 ## Conclusion
 
 The kernel is correct: quality degrades smoothly with the budget, and at budget 2048 of a 4k context it is close to dense. Decode speed now depends on the budget instead of the context length. A 4k context says little about long contexts, so experiment 02 measures quality at 32k.
+
+## Files
+
+- `quest-sweep.sh`: KLD for the dense baseline and budgets 256/512/1024. `quest-speed.sh`: KLD at budget 2048 and the speed bench. Both are the original scripts.
+- `logs/`: raw output (`sweep-<budget>.log`, `bench-<budget>.log`).

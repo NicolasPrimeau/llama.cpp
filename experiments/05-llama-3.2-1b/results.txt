@@ -1,0 +1,14 @@
+needle dense: RESULT 15/15 fails: 
+needle perhead2048: RESULT 15/15 fails: 
+needle perhead1024: RESULT 14/15 fails: depth=0.05 code=26316 ok=0 answer=" 2634. ma'am." prefill=1s total=6s 
+needle perhead512: RESULT 13/15 fails: depth=0.50 code=38182 ok=0 answer=" 3812." prefill=1s total=4s depth=0.75 code=20034 ok=0 answer=" 2004." prefill=1s total=4s 
+needle shared2048: RESULT 15/15 fails: 
+dense: 24.19.302.393 I Final estimate: PPL = 16.6420 +/- 0.25520
+kld perhead2048: chunk PPL ln(PPL(Q)/PPL(base)) KL Divergence Δp RMS Same top p;Mean PPL(Q)/PPL(base) : 0.991378 ± 0.002237;Mean KLD: 0.057049 ± 0.000410;99.0% KLD: 0.310007;Same top p: 86.397 ± 0.189 %;
+kld perhead1024: chunk PPL ln(PPL(Q)/PPL(base)) KL Divergence Δp RMS Same top p;Mean PPL(Q)/PPL(base) : 1.018828 ± 0.002992;Mean KLD: 0.099276 ± 0.000747;99.0% KLD: 0.566501;Same top p: 82.283 ± 0.211 %;
+kld q8_0: chunk PPL ln(PPL(Q)/PPL(base)) KL Divergence Δp RMS Same top p;Mean PPL(Q)/PPL(base) : 1.001905 ± 0.000479;Mean KLD: 0.002466 ± 0.000023;99.0% KLD: 0.016019;Same top p: 96.976 ± 0.095 %;
+speed dense:     tg64 @ d8192           7.17 ± 0.45 ;   tg64 @ d32768           1.82 ± 0.00 ;
+speed perhead2048:     tg64 @ d8192          14.50 ± 0.25 ;   tg64 @ d32768           7.62 ± 0.04 ;
+speed perhead1024:     tg64 @ d8192          16.74 ± 0.30 ;   tg64 @ d32768           8.22 ± 0.06 ;
+speed q8_0:     tg64 @ d8192           9.56 ± 0.17 ;   tg64 @ d32768           3.00 ± 0.15 ;
+done

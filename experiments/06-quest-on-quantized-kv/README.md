@@ -46,3 +46,9 @@ The dense q8_0 results match between old and new. A regression check of f16 shar
 ## Conclusion
 
 The gains stack. q8_0 halves cache memory, and Quest on q8_0 is slightly faster than Quest on f16 because the selected pages are half the bytes. This is the recommended setting: `-ctk q8_0 -ctv q8_0` with `GGML_QUEST_BUDGET=2048`.
+
+## Files
+
+- `check.sh` produces `results.txt` (correctness); `bench.sh` produces `bench-results.txt` (speed, on the first version with the split-KV slowdown). Both are the original scripts.
+- `recheck-final.txt`: the re-measurement on the committed code.
+- `logs/`: raw output.

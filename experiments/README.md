@@ -1,6 +1,6 @@
 # Quest experiments
 
-Experiments run while building Quest sparse decode ([arXiv:2406.10774](https://arxiv.org/abs/2406.10774)) on this branch. Each folder holds one write-up with the question, the exact commands, the results and what we concluded. This directory is not meant for upstream.
+Experiments run while building Quest sparse decode ([arXiv:2406.10774](https://arxiv.org/abs/2406.10774)) on this branch. Each experiment has its own folder: a `README.md` write-up (question, commands, results, conclusion), plus the original scripts, their summary output and the raw logs. `tools/` holds what several experiments share. This directory is not meant for upstream.
 
 | # | Experiment | Outcome |
 |---|---|---|
@@ -32,4 +32,4 @@ g++ -O2 -std=c++17 experiments/tools/needle.cpp -Iinclude -Iggml/include -Lbuild
     -lllama -lggml -lggml-base -Wl,-rpath,$PWD/build/bin -o build/bin/needle
 ```
 
-The commands in each write-up assume `M=<model.gguf>` and `T=experiments/tools/pride.txt`, and are run from the repo root. They are cleaned-up versions of the scripts that were actually run, with the same flags. The numbers are from those original runs.
+The commands in each write-up assume `M=<model.gguf>` and `T=experiments/tools/pride.txt`, and are run from the repo root. They are cleaned-up versions of the scripts in each folder. The checked-in scripts are the originals as run on the Beelink, so they still contain its absolute paths. The large files are not checked in: `.kld` baselines (GBs) and saved needle prefill states.

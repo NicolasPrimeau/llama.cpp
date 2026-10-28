@@ -33,3 +33,8 @@ Per-head at budget 2048 matches shared at budget 4096.
 ## Conclusion
 
 Per-head selection halves KLD at 32k for about 5% of decode speed, so it became the default (commit "Quest selects pages per query head by default"). `GGML_QUEST_PER_HEAD=0` keeps the shared mode.
+
+## Files
+
+- `quest-perhead.sh` produces `results.txt` (KLD); `quest-bench2.sh` produces `bench-results.txt` (speed). Both are the original scripts.
+- `logs/`: raw output.

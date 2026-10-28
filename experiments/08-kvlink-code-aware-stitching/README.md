@@ -2,7 +2,7 @@
 
 **Question:** Coding agents re-send the same files over and over. Suppose each file's KV cache is computed once on its own, and then caches are concatenated (A then B). B's cache never saw A, so it is wrong in places. CacheBlend fixes this by recomputing the B tokens whose KV deviates most. **Can we use the code itself to choose which tokens to recompute, namely B's lines that reference symbols defined in A?** That would need no deviation pass at all.
 
-**Setup:** This is a Python/transformers experiment, separate from this llama.cpp branch (`kvlink.py`, on the Beelink at `~/projects/kvlink/`).
+**Setup:** This is a Python/transformers experiment that doesn't use this llama.cpp branch (`kvlink.py`, needs `torch` and `transformers`).
 
 Everything is computed in a single forward pass with a custom attention mask:
 - A is causal within itself.
@@ -38,3 +38,9 @@ Mean over 8 pairs. Every method recomputes the same number of tokens (about 7.6%
 ## Conclusion
 
 Selecting tokens from the code structure is no better than random. The error does not sit on the lines that mention A. Most of it is spread out, and much of what remains is the attention sink at B's start: recomputing 0.4% of tokens there recovers more than recomputing every code-referencing line. KV deviation (CacheBlend) remains the right signal. We dropped the idea and went back to Quest.
+
+## Files
+
+- `kvlink.py`: the experiment. `check.log`: the masked-pass sanity check.
+- `results.jsonl`: one row per file pair (the table above averages it).
+- `results-run1.jsonl`: an earlier partial run, from before the sink controls were added.

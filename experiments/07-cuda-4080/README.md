@@ -13,7 +13,7 @@ The port has been compiled for sm_89 with CUDA 13.4 but has never run on a GPU.
 **Run:**
 
 ```sh
-experiments/tools/run-cuda.sh ~/models/Llama-3.2-1B-Instruct-Q8_0.gguf [~/models/<8B>.gguf]
+experiments/07-cuda-4080/run.sh ~/models/Llama-3.2-1B-Instruct-Q8_0.gguf [~/models/<8B>.gguf]
 ```
 
 The script builds `build-cuda/` and then runs, in order:
@@ -22,7 +22,7 @@ The script builds `build-cuda/` and then runs, in order:
 3. 1B speed for dense, Quest, q8_0 and Quest + q8_0.
 4. If an 8B model is given, the same speed runs, KLD and needle on it.
 
-The summary goes to `experiments/out/results.txt`. Logs and KLD files (about 20 GB) go to `experiments/out/`, which is gitignored.
+The summary goes to `results.txt` in this folder, to be checked in. Logs and KLD files (about 20 GB) go to `work/`, which is gitignored.
 
 ## Expected
 
@@ -37,4 +37,4 @@ The GPU speedup should be smaller than on the CPU. GPU decode is bandwidth-bound
 
 ## Results
 
-(to fill in from `experiments/out/results.txt`)
+(to fill in from `results.txt`)

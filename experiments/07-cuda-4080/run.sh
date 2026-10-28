@@ -1,20 +1,20 @@
 #!/bin/bash
 # Quest on CUDA: correctness, quality and speed. Each step appends one line to results.txt.
 #
-# usage: experiments/tools/run-cuda.sh <Llama-3.2-1B-Instruct-Q8_0.gguf> [8B model .gguf]
-# Builds this checkout into build-cuda/ for the local GPU (CUDA_ARCH=75 etc. to override). Logs go to experiments/out/, the summary to experiments/out/results.txt.
+# usage: experiments/07-cuda-4080/run.sh <Llama-3.2-1B-Instruct-Q8_0.gguf> [8B model .gguf]
+# Builds this checkout into build-cuda/ for the local GPU (CUDA_ARCH=75 etc. to override). Logs go to work/ next to this script (gitignored), the summary to results.txt.
 #
 # Step 1 checks the CUDA port against the CPU numbers measured on the same 1B model (32k context, budget 2048):
 #   KLD vs dense 0.057, same top-1 86.4%, needle 15/15. A broken selection or gather shows up as KLD >> 0.1.
 set -u
-D=$(dirname "$(realpath "$0")"); L=$(realpath "$D/../.."); W=$L/experiments/out; R=$W/results.txt; T=$D/pride.txt
+D=$(dirname "$(realpath "$0")"); L=$(realpath "$D/../.."); W=$D/work; R=$D/results.txt; T=$D/../tools/pride.txt
 M1=$(realpath "$1"); M8=${2:+$(realpath "$2")}
 mkdir -p "$W"
 
 build() {
     cmake -S "$L" -B "$L/build-cuda" -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=${CUDA_ARCH:-native} -DCMAKE_BUILD_TYPE=Release > "$W/cmake.log" 2>&1 &&
     cmake --build "$L/build-cuda" -j --target llama-perplexity llama-bench >> "$W/cmake.log" 2>&1 &&
-    g++ -O2 -std=c++17 "$D/needle.cpp" -I"$L/include" -I"$L/ggml/include" -L"$L/build-cuda/bin" \
+    g++ -O2 -std=c++17 "$D/../tools/needle.cpp" -I"$L/include" -I"$L/ggml/include" -L"$L/build-cuda/bin" \
         -lllama -lggml -lggml-base -Wl,-rpath,"$L/build-cuda/bin" -o "$W/needle"
 }
 build || { echo "build failed, see $W/cmake.log"; exit 1; }
