@@ -9610,7 +9610,8 @@ static bool ggml_compute_forward_flash_attn_ext_quest(
     const ggml_tensor * v     = dst->src[2];
     const ggml_tensor * mask  = dst->src[3];
 
-    if (cfg.budget <= 0 || !mask || mask->ne[2] != 1 || k->type != GGML_TYPE_F16 || v->type != GGML_TYPE_F16) {
+    const ggml_to_float_t k_to_float = ggml_get_type_traits(k->type)->to_float;
+    if (cfg.budget <= 0 || !mask || mask->ne[2] != 1 || (k->type != GGML_TYPE_F32 && !k_to_float)) {
         return false;
     }
 
@@ -9688,6 +9689,9 @@ static bool ggml_compute_forward_flash_attn_ext_quest(
     }
     ggml_barrier(params->threadpool);
 
+    // keys are dequantized one row at a time into the thread's chunk-kernel scratch, which is free until the exact pass
+    float * krow = (float *) params->wdata + ith*(DK + 2*DV + CACHE_LINE_SIZE_F32);
+
     // refresh stale summaries and score every page, split across threads by (page, kv head)
     for (int64_t it = ith; it < n_pages*nek2; it += nth) {
         const int64_t pg = it/nek2;
@@ -9702,15 +9706,19 @@ static bool ggml_compute_forward_flash_attn_ext_quest(
         ggml_fp16_t * kmax = qp->kmax.data() + (pg*nek2 + g)*DK;
 
         if (qp->fp[pg*nek2 + g] != f) {
-            for (int64_t i = 0; i < DK; i++) {
-                float lo = INFINITY, hi = -INFINITY;
-                for (int64_t c = c0; c < c1; c++) {
-                    const float x = GGML_CPU_FP16_TO_FP32(((const ggml_fp16_t *) (k0 + (c - c0)*k->nb[1]))[i]);
-                    lo = std::min(lo, x);
-                    hi = std::max(hi, x);
+            // rounding to F16 is monotonic, so the min/max of the rounded keys is the rounded min/max
+            for (int64_t c = c0; c < c1; c++) {
+                const char * kc = k0 + (c - c0)*k->nb[1];
+                if (k->type == GGML_TYPE_F32) {
+                    memcpy(krow, kc, DK*sizeof(float));
+                } else {
+                    k_to_float(kc, krow, DK);
                 }
-                kmin[i] = GGML_CPU_FP32_TO_FP16(lo);
-                kmax[i] = GGML_CPU_FP32_TO_FP16(hi);
+                for (int64_t i = 0; i < DK; i++) {
+                    const ggml_fp16_t x = GGML_CPU_FP32_TO_FP16(krow[i]);
+                    if (c == c0 || GGML_CPU_FP16_TO_FP32(x) < GGML_CPU_FP16_TO_FP32(kmin[i])) kmin[i] = x;
+                    if (c == c0 || GGML_CPU_FP16_TO_FP32(x) > GGML_CPU_FP16_TO_FP32(kmax[i])) kmax[i] = x;
+                }
             }
             qp->fp[pg*nek2 + g] = f;
         }
@@ -9838,9 +9846,13 @@ static void ggml_compute_forward_flash_attn_ext_f16(
     const bool use_ref = params->use_ref;
 
     const bool kv_is_f32_or_f16 = (k->type == GGML_TYPE_F32 || k->type == GGML_TYPE_F16);
-    const bool use_split_kv_path = !use_ref && (neq1 == 1 && neq3 == 1) && kv_is_f32_or_f16 && (k->type == v->type) && q->type == GGML_TYPE_F32 && nek1 >= 512;
+    // single-token decode over a long cache
+    const bool is_decode = !use_ref && (neq1 == 1 && neq3 == 1) && q->type == GGML_TYPE_F32 && nek1 >= 512;
+    const bool use_split_kv_path = is_decode && kv_is_f32_or_f16 && (k->type == v->type);
 
-    if (use_split_kv_path && ggml_compute_forward_flash_attn_ext_quest(params, dst)) {
+    // Quest takes any K/V type the chunk kernel reads (K through vec_dot, V through to_float). Dense quantized decode
+    // stays on the per-head path: splitting the cache over threads was slower there at 32k (Llama-3.2-1B q8_0)
+    if (is_decode && ggml_compute_forward_flash_attn_ext_quest(params, dst)) {
         // sparse decode handled the whole op
     } else if (use_split_kv_path) {
         const int64_t chunk_size = (nek1 + nth - 1) / nth;
